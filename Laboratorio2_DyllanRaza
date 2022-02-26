@@ -1,0 +1,205 @@
+import pandas as pd
+import sqlalchemy
+
+def extract(path):
+    #Dyllan Raza
+
+    Databasec = sqlalchemy.create_engine(path)
+    conn = Databasec.connect()
+
+    return Databasec, conn
+
+def extract_n(path):
+    
+    Databasen = sqlalchemy.create_engine(path)
+    conn_n = Databasen.connect()
+
+    return Databasen, conn_n
+
+
+def transformacion_employee(connDB):
+
+    query = """SELECT EmployeeId,
+       LastName,
+       FirstName,
+       Title,
+       BirthDate,
+       HireDate,
+       Address,
+       City,
+       State,
+       Country,
+       PostalCode,
+       Phone,
+       Fax,
+       Email
+  FROM employees;"""
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+def transformacion_artista(connDB):
+
+    query = """SELECT ArtistId,Name as Name_Artist FROM artists;"""
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+def transformacion_fact_sales(connDB):
+
+    query = """SELECT it.InvoiceLineId AS FactId,
+       i.InvoiceId,
+       c.CustomerId,
+       c.SupportRepId AS EmployeeId,
+       it.TrackId,
+       ar.ArtistId,
+       c.CustomerId AS LocationId,
+       strftime('%Y%m%d', datetime(i.InvoiceDate) ) AS TimeId,
+       it.UnitPrice * it.Quantity AS Price
+  FROM invoice_items it
+       JOIN
+       invoices i ON i.InvoiceId = it.InvoiceId
+       JOIN
+       customers c ON c.CustomerId = i.CustomerId
+       JOIN
+       tracks t ON t.TrackId = it.TrackId
+       JOIN
+       albums al ON al.AlbumId = t.AlbumId
+       JOIN
+       artists ar ON ar.ArtistId = al.ArtistId
+ ORDER BY 1;"""
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+
+def transformacion_location(connDB):
+
+    query = """
+    SELECT CustomerId AS LocationId,
+       Address,
+       City,
+       COALESCE(State, 'N/A') AS State,
+       Country,
+       COALESCE(PostalCode, 'N/A') AS PostalCode
+    FROM customers;
+        """
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+def transformacion_track(connDB):
+
+    query = """SELECT t.TrackId,
+       t.Name AS TrackName,
+       al.Title AS Album,
+       g.Name AS Genre,
+       mt.Name AS MediaType,
+       ifnull(t.Composer, 'N.A') AS Composer,
+       t.Milliseconds,
+       t.Bytes,
+       t.UnitPrice AS Price
+  FROM tracks t
+       JOIN
+       albums al ON t.AlbumId = al.AlbumId
+       JOIN
+       genres g ON t.GenreId = g.GenreId
+       JOIN
+       media_types mt ON mt.MediaTypeId = t.MediaTypeId
+ ORDER BY t.TrackId;"""
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+def transformacion_time(connDB):
+
+    query = """
+    SELECT 
+    strftime('%Y%m%d', datetime(InvoiceDate) ) AS TimeId,
+    InvoiceDate as Fecha,
+        strftime('%Y', InvoiceDate) AS Año,
+       strftime('%m', InvoiceDate) AS Mes,
+       strftime('%d', InvoiceDate) AS día,
+       case strftime('%w',InvoiceDate)
+         when '0' then 'Domingo'
+         when '1' then 'Lunes'
+         when '2' then 'Martes'
+         when '3' then 'Miercoles'
+         when '4' then 'Jueves'
+         when '5' then 'Viernes'
+         when '6' then 'Sabado'
+       end as Name_Day,
+       strftime('%w', InvoiceDate) as dia_semana,
+       strftime('%W', InvoiceDate) AS semana,
+       case 
+        when 0 + strftime('%m', InvoiceDate) between  1 and  4 then 'Primer Trimestre'
+        when 0 + strftime('%m', InvoiceDate) between  5 and  8 then 'Segundo Trimestre'
+        when 0 + strftime('%m', InvoiceDate) between  9 and  12 then 'Tercer Trimestre'
+    end as Trimestre     
+FROM invoices;
+        """
+    result = connDB.execute(query)
+
+    df = pd.DataFrame(result.fetchall())
+    df.columns = result.keys()
+
+    return df
+
+def load(datos, connectar, tabla):
+
+    # Ingreso de datos en la tabla correspondiente con su conexión
+    datos.to_sql(tabla, connectar, if_exists='append', index=False)
+    connectar.close()
+    return print("Datos cargados")
+
+if __name__ == '__main__':
+    direccion1 = "sqlite:///chinook.db"
+    direccion2 = "sqlite:///Dyllan_Raza_Laboratorio2.db"
+
+    # Extración de la BD Chinook
+    extraerBD = extract(direccion1)
+    
+    #Definición de la conexión secundaria
+    DatabaseEx = extract_n(direccion2)
+    connex = DatabaseEx[1]
+
+    #Extracción de cada tabla 
+    engine = extraerBD[0]
+    extraer1 = transformacion_track(engine)
+    extraer2 = transformacion_employee(engine)
+    extraer3 = transformacion_time(engine)
+    extraer4 = transformacion_artista(engine)
+    extraer5 = transformacion_fact_sales(engine)
+    extraer6 = transformacion_location(engine)
+
+    #Definición de tabla
+    tabla1 = "dim_track"
+    tabla2 = "dim_employee"
+    tabla3 = "dim_Time"
+    tabla4 = "dim_artist"
+    tabla5 = "dim_location"
+    tabla6 = "fact_Sales"
+    
+    #Proceso de carga
+    #load(extraer1, connex, tabla1)
+    #load(extraer2, connex, tabla2)  
+    #load(extraer3, connex, tabla3)
+    #load(extraer4, connex, tabla4)
+    #load(extraer5, connex, tabla5)
+    load(extraer6, connex, tabla6)
+    print("ETL completada")
